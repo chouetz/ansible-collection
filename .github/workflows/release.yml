@@ -27,6 +27,7 @@ jobs:
     uses: ./.github/workflows/pull-ansible-role.yml
   create_new_release:
     runs-on: ubuntu-latest
+    needs: synchronise
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
