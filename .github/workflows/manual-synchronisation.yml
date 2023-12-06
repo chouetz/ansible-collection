@@ -1,0 +1,8 @@
+---
+name: Synchronise ansible-datadog role inside of roles/agent
+
+on: [workflow_dispatch]
+
+jobs:
+  synchronise:
+    uses: ./.github/workflows/pull-ansible-role.yml

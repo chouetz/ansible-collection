@@ -1,0 +1,98 @@
+---
+name: "Release"
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Type of release version"
+        required: true
+        default: "minor"
+        type: choice
+        options:
+          - "major"
+          - "minor"
+          - "patch"
+      api_key:
+        description: "Token to upload on ansible galaxy"
+        required: true
+        default: ""
+      beta:
+        description: "Beta release"
+        required: false
+        default: false
+        type: boolean
+
+jobs:
+  synchronise:
+    uses: ./.github/workflows/pull-ansible-role.yml
+  create_new_release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Compute new version
+        id: compute_version
+        run: |
+          version=${{ github.event.inputs.version }}
+          current_version=$(git tag --list | sort -t. -k1,1n -k2,2n -k3,3n | tail -1)
+          echo "Current version: $current_version"
+          echo "current_version=$current_version" >> $GITHUB_OUTPUT
+          major=$(echo "$current_version" | cut -d"." -f1)
+          minor=$(echo "$current_version" | cut -d"." -f2)
+          patch=$(echo "$current_version" | cut -d"." -f3)
+          if [ "$version" == "major" ]; then
+            next_version="$((major+1)).0.0"
+          elif [ "$version" == "minor" ]; then
+            next_version="$major.$((minor+1)).0"
+          else
+            next_version="$major.$minor.$((patch+1))"
+          fi
+          echo "new_version=$next_version" >> $GITHUB_OUTPUT
+          echo "New $version version: $next_version"
+      - name: Update changelog
+        run: |
+          role_tag=$(curl -s https://api.github.com/repos/datadog/ansible-datadog/tags | jq -r '.[] | select(.name | test("^[0-9]")) | .name' | head -n1)
+          echo "# ${{ steps.compute_version.outputs.new_version }} / $(date "+%Y-%m-%d")" > tmp
+          echo "" >> tmp
+          echo "* The collection contains the `Agent role ${role_tag} <https://github.com/DataDog/ansible-datadog/blob/main/CHANGELOG.md>`" >> tmp
+          echo "" >> tmp
+      - name: Update version
+        run: sed -i "s/${{ steps.compute_version.outputs.current_version }}/${{ steps.compute_version.outputs.new_version }}/" galaxy.yml roles/agent/templates/install_info.j2
+      - name: Set up Git
+        run: |
+          git config --global user.email "actions@github.com"
+          git config --global user.name "GitHub Actions"
+      - name: Create detached commit and release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          new=${{ steps.compute_version.outputs.new_version }}
+          current=${{ steps.compute_version.outputs.current_version }}
+          if [ -z "$current" ]; then
+            body="$(cat CHANGELOG.md)"
+          else
+            body="$(sed -n "/${new}/,/${current}/p" CHANGELOG.md | tail -n +2 | head -n -1)"
+          fi
+          release_name="Release $new"
+          git commit -am "${release_name}"
+          git push origin main
+          git tag "$new"
+          git push origin "$new"
+          gh release create "$new" \
+              --title="$new / $(date "+%Y-%m-%d")" \
+              --notes="$body"
+      - name: save server names
+        id: server_names
+        run: |
+          if [ {{ github.event.inputs.beta }} == "true" ]; then
+            echo "server_name=https://beta-galaxy.ansible.com/" >> $GITHUB_OUTPUT
+          else
+            echo "server_name=https://galaxy.ansible.com/" >> $GITHUB_OUTPUT
+          fi
+      - name: upload the collection
+        uses: actions/ansible-publish-action@v1
+        with:
+          api_key: ${{ github.event.inputs.api_key }}
+          api_server: ${{ steps.server_names.outputs.server_name }}

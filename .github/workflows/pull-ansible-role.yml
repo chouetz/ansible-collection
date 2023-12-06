@@ -1,6 +1,6 @@
-name: Sync ansible-datadog role inside of roles/agent
+name: Pull ansible role from datadog/ansible-datadog
 
-on: [workflow_dispatch]
+on: [workflow_call]
 
 jobs:
   execute:
