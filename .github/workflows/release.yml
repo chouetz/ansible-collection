@@ -56,7 +56,7 @@ jobs:
           role_tag=$(curl -s https://api.github.com/repos/datadog/ansible-datadog/tags | jq -r '.[] | select(.name | test("^[0-9]")) | .name' | head -n1)
           echo "# ${{ steps.compute_version.outputs.new_version }} / $(date "+%Y-%m-%d")" > tmp
           echo "" >> tmp
-          echo "* The collection contains the `Agent role ${role_tag} <https://github.com/DataDog/ansible-datadog/blob/main/CHANGELOG.md>`" >> tmp
+          echo "* The collection contains the `Agent role ${role_tag} <https://github.com/DataDog/ansible-datadog/blob/main/CHANGELOG.rst>`" >> tmp
           echo "" >> tmp
       - name: Update version
         run: sed -i "s/${{ steps.compute_version.outputs.current_version }}/${{ steps.compute_version.outputs.new_version }}/" galaxy.yml roles/agent/templates/install_info.j2
@@ -71,9 +71,9 @@ jobs:
           new=${{ steps.compute_version.outputs.new_version }}
           current=${{ steps.compute_version.outputs.current_version }}
           if [ -z "$current" ]; then
-            body="$(cat CHANGELOG.md)"
+            body="$(cat CHANGELOG.rst)"
           else
-            body="$(sed -n "/${new}/,/${current}/p" CHANGELOG.md | tail -n +2 | head -n -1)"
+            body="$(sed -n "/${new}/,/${current}/p" CHANGELOG.rst | tail -n +2 | head -n -1)"
           fi
           release_name="Release $new"
           git commit -am "${release_name}"
